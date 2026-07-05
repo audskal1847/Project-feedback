@@ -74,7 +74,7 @@ if st.button("🚀 탐구 주제 구체화 및 피드백 받기"):
 
                 # API 호출 (모델은 필요에 따라 변경 가능, 예: anthropic/claude-3.5-sonnet, openai/gpt-4o)
                 response = client.chat.completions.create(
-                    model="anthropic/claude-3.5-sonnet", 
+                   model="google/gemini-2.0-flash-lite-preview-02-05:free", 
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt}
