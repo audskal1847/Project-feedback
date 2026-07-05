@@ -22,7 +22,7 @@ with st.sidebar:
         # 오류 해결: 구글 API 호환성을 위해 최신(-latest) 및 안정화(gemini-pro) 버전으로 모델명 수정
         selected_model = st.selectbox(
             "Gemini 모델 선택",
-            ["gemini-1.5-flash-latest", "gemini-1.5-pro-latest", "gemini-pro"]
+            ["gemini-1.5-flash", "gemini-1.5-pro-latest", "gemini-pro"]
         )
         st.markdown("[Google AI Studio 키 발급받기](https://aistudio.google.com/)")
         
