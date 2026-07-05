@@ -7,7 +7,7 @@ st.set_page_config(page_title="학생부 심화 탐구주제 구체화 도우미
 st.title("💡 학생부 심화 탐구주제 구체화 프로그램")
 st.markdown("추상적이고 두루뭉술한 탐구 주제를 진로 목표에 맞춰 구체적이고 체계적으로 다듬어 드립니다.")
 
-# 2. 사이드바: API 제공자 및 키 설정 (구글 API 추가)
+# 2. 사이드바: API 제공자 및 키 설정
 with st.sidebar:
     st.header("🔑 API 설정")
     
@@ -19,16 +19,15 @@ with st.sidebar:
     
     if api_provider == "Google AI Studio (공식)":
         api_key = st.text_input("Google API 키를 입력하세요", type="password")
-        # 구글 공식 최신 안정화 모델 목록
+        # 오류 해결: 구글 API 호환성을 위해 최신(-latest) 및 안정화(gemini-pro) 버전으로 모델명 수정
         selected_model = st.selectbox(
             "Gemini 모델 선택",
-            ["gemini-1.5-flash", "gemini-1.5-pro"]
+            ["gemini-1.5-flash-latest", "gemini-1.5-pro-latest", "gemini-pro"]
         )
         st.markdown("[Google AI Studio 키 발급받기](https://aistudio.google.com/)")
         
     else:  # OpenRouter 선택 시
         api_key = st.text_input("OpenRouter API 키를 입력하세요", type="password")
-        # OpenRouter에서 안정적인 무료/유료 모델 목록
         selected_model = st.selectbox(
             "OpenRouter 모델 선택",
             [
@@ -76,14 +75,6 @@ system_prompt = """
 4. [맞춤형 도서 및 연계 활동 제안]: 해당 주제의 깊이를 더할 수 있는 추천 도서 2권과, 이후 창체(자율/동아리)나 다른 과목으로 연계할 수 있는 후속 활동 제안.
 """
 
-user_prompt = f"""
-- 학생 정보: {school_name} {grade} {student_name}
-- 진로 계열: {career_track} ({specific_interest})
-- 학생의 초기 탐구 주제: {initial_topic}
-
-이 정보를 바탕으로 학생의 탐구 주제를 구체화하고 피드백을 제공해주세요.
-"""
-
 # 6. 피드백 생성 버튼 및 분기 처리 로직
 if st.button("🚀 탐구 주제 구체화 및 피드백 받기"):
     if not api_key:
@@ -91,6 +82,14 @@ if st.button("🚀 탐구 주제 구체화 및 피드백 받기"):
     elif not initial_topic:
         st.warning("탐구 주제를 입력해주세요.")
     else:
+        user_prompt = f"""
+        - 학생 정보: {school_name} {grade} {student_name}
+        - 진로 계열: {career_track} ({specific_interest})
+        - 학생의 초기 탐구 주제: {initial_topic}
+
+        이 정보를 바탕으로 학생의 탐구 주제를 구체화하고 피드백을 제공해주세요.
+        """
+        
         with st.spinner("AI가 학생의 주제를 분석하고 체계적으로 다듬고 있습니다... ⏳"):
             try:
                 # 분기 1: Google AI Studio 공식 API를 사용할 때
