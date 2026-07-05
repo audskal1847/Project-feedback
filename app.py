@@ -19,21 +19,23 @@ with st.sidebar:
     
     if api_provider == "Google AI Studio (공식)":
         api_key = st.text_input("Google API 키를 입력하세요", type="password")
-        # 오류 해결: 구글 API 호환성을 위해 최신(-latest) 및 안정화(gemini-pro) 버전으로 모델명 수정
+        # 구글 공식 서버에서 오류 없는 표준 모델명으로 세팅
         selected_model = st.selectbox(
             "Gemini 모델 선택",
-            ["gemini-1.5-flash", "gemini-1.5-pro-latest", "gemini-pro"]
+            ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.5-flash"]
         )
         st.markdown("[Google AI Studio 키 발급받기](https://aistudio.google.com/)")
         
     else:  # OpenRouter 선택 시
         api_key = st.text_input("OpenRouter API 키를 입력하세요", type="password")
+        # 404 에러 유발 모델 삭제 및 선불결제 크레딧으로 바로 쓸 수 있는 확실한 고성능 모델 목록 구성
         selected_model = st.selectbox(
             "OpenRouter 모델 선택",
             [
-                "google/gemini-2.0-flash-exp:free", 
-                "google/gemma-2-9b-it:free", 
-                "anthropic/claude-3.5-sonnet"
+                "openai/gpt-4o",
+                "anthropic/claude-3.5-sonnet",
+                "google/gemma-2-9b-it:free",
+                "meta-llama/llama-3.3-70b-instruct:free"
             ]
         )
         st.markdown("[OpenRouter 키 발급받기](https://openrouter.ai/)")
