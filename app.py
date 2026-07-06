@@ -44,21 +44,25 @@ with st.sidebar:
     
     if api_provider == "Google AI Studio (공식)":
         api_key = st.text_input("Google API 키를 입력하세요", type="password")
-        selected_model = st.selectbox(
-            "Gemini 모델 선택",
-            ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.5-flash"]
-        )
+        st.info("Google AI Studio는 'gemini-3.5-flash' 모델로 고정되어 실행됩니다.")
+        selected_model = "gemini-3.5-flash"
         st.markdown("[Google AI Studio 키 발급받기](https://aistudio.google.com/)")
         
-    else:
+    else:  # OpenRouter 선택 시
         api_key = st.text_input("OpenRouter API 키를 입력하세요", type="password")
         selected_model = st.selectbox(
             "OpenRouter 모델 선택",
             [
-                "openai/gpt-4o",
-                "anthropic/claude-3.5-sonnet",
-                "google/gemma-2-9b-it:free",
-                "meta-llama/llama-3.3-70b-instruct:free"
+                # 유료 모델
+                "anthropic/claude-sonnet-5",
+                "anthropic/claude-opus-4.8",
+                "google/gemini-3.5-flash",
+                "deepseek/deepseek-v4-pro",
+                "qwen/qwen3.7-plus",
+                "z-ai/glm-5.2",
+                # 무료 모델
+                "openai/gpt-oss-120b:free",
+                "google/gemma-4-31b-it:free"
             ]
         )
         st.markdown("[OpenRouter 키 발급받기](https://openrouter.ai/)")
@@ -88,16 +92,23 @@ prior_activity = st.text_area(
     placeholder="예) 1학년 통합과학 시간에 '신재생 에너지의 한계'에 대해 발표했었음."
 )
 
-# 6. 연관 교과목 선택 (2022 개정 교육과정 반영 신규 기능)
+# 6. 연관 교과목 선택 (세분화 반영)
 st.subheader("4. 탐구 주제 연관 교과목 선택")
 subject_categories = [
-    "국어 교과 (화법과 언어, 독서와 작문, 문학, 주제 탐구 독서 등)",
-    "수학 교과 (대수, 미적분I, 확률과 통계, 기하, 미적분II, 인공지능 수학 등)",
-    "영어 교과 (영어I, 영어II, 영어 독해와 작문, 진로 영어 등)",
-    "사회 교과 (세계시민과 지리, 세계사, 사회와 문화, 현대사회와 윤리, 정치, 경제 등)",
-    "과학 교과 (물리학, 화학, 생명과학, 지구과학, 융합과학 탐구, 세포와 물질대사 등)",
-    "정보/기술·가정 교과 (정보, 인공지능 기초, 데이터 과학, 창의 공학 설계 등)",
-    "예체능 및 교양 교과 (보건, 환경, 철학, 심리학, 교육학 등)"
+    "국어 (화법과 언어, 독서와 작문, 문학 등)",
+    "수학 (대수, 미적분, 확률과 통계, 기하 등)",
+    "영어 (영어, 진로 영어, 영어 독해와 작문 등)",
+    "역사 (한국사, 세계사, 동아시아 역사 기행 등)",
+    "지리 (한국지리 탐구, 세계시민과 지리, 여행지리 등)",
+    "일반사회 (정치, 법과 사회, 경제, 사회와 문화 등)",
+    "윤리 (윤리와 사상, 현대사회와 윤리, 윤리문제 탐구 등)",
+    "물리학 (물리학, 역학과 에너지, 전자기와 양자 등)",
+    "화학 (화학, 물질과 에너지, 화학 반응의 세계 등)",
+    "생명과학 (생명과학, 세포와 물질대사, 생물의 유전 등)",
+    "지구과학 (지구과학, 지구시스템과학, 행성우주과학 등)",
+    "정보/소프트웨어 (정보, 인공지능 기초, 데이터 과학 등)",
+    "기술·가정/공학 (창의 공학 설계, 로봇과 공학세계 등)",
+    "예술/체육/교양 (음악, 미술, 체육, 보건, 철학 등)"
 ]
 selected_subjects = st.multiselect(
     "현재 생각 중인 탐구 주제와 가장 연관성이 깊다고 생각하는 교과목을 선택해주세요. (복수 선택 가능)",
@@ -112,7 +123,7 @@ initial_topic = st.text_area(
     placeholder="예) 2학년 화학 시간에 배운 중화반응을 활용해 토양 오염을 해결하는 방안을 탐구하고 싶음."
 )
 
-# 8. 시스템 프롬프트 (2022 개정 교육과정 및 교과 연계성 전면 반영)
+# 8. 시스템 프롬프트
 system_prompt = """
 당신은 고등학교 학생부종합전형(입학사정관) 및 2022 개정 교육과정 교과 세특 전문가입니다. 
 학생이 입력한 [사전 수행 활동], [연관 교과목], [초기 탐구 주제]를 유기적으로 연결하여, 교과 수업 내용에 바탕을 둔 '꼬리물기식 심화 탐구(종단적 연계)'가 되도록 설계해야 합니다.
@@ -124,7 +135,7 @@ system_prompt = """
 반드시 다음 5가지 형식과 조건에 맞춰 답변을 제공하세요:
 
 1. [교과 연계성 및 주제 진단]
-   - 학생의 '사전 활동', '현재 주제', 그리고 **'선택한 연관 교과목'** 간의 유기적 연계성 평가 (개조식)
+   - 학생의 '사전 활동', '현재 주제', 그리고 **'선택한 연관 교과목(역사, 지리, 물리, 화학 등 세분화된 학문 영역 고려)'** 간의 유기적 연계성 평가 (개조식)
    - 2022 개정 교육과정을 바탕으로 해당 교과목의 어떤 핵심 개념과 원리가 본 탐구 주제에 적용될 수 있는지 명시적으로 분석 (개조식)
    - 학업 역량을 돋보이게 하기 위한 발전 및 보완점 제시 (개조식)
 
