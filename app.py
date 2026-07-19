@@ -3,13 +3,22 @@ from openai import OpenAI
 import google.generativeai as genai
 import requests
 from bs4 import BeautifulSoup
+import io
+import os
+import pandas as pd
+from docx import Document
+from fpdf import FPDF
 
 # 1. 페이지 기본 설정
 st.set_page_config(page_title="학생부 심화 탐구주제 구체화 도우미", page_icon="🏫", layout="wide")
 st.title("💡 학생부 심화 탐구주제 구체화 프로그램")
 st.markdown("추상적이고 두루뭉술한 탐구 주제를 2022 개정 교육과정 교과목 및 진로 목표에 맞춰 체계적인 '꼬리물기 심화 탐구'로 다듬어 드립니다.")
 
-# --- 웹 크롤링 함수 정의 (캐시 적용으로 속도 향상) ---
+# --- 세션 상태 초기화 (결과 유지용) ---
+if "result_text" not in st.session_state:
+    st.session_state.result_text = ""
+
+# --- 웹 크롤링 함수 정의 ---
 @st.cache_data(ttl=3600)
 def scrape_reference_data():
     url = "https://nojaesu.com/category/DIRECTORY/%EA%B5%90%EA%B3%BC%EC%97%B0%EA%B3%84%26%EC%A0%84%EA%B3%B5%EC%A0%81%ED%95%A9%EC%84%9C%20%EA%B8%B0%EC%82%AC%20%EB%AA%A8%EC%9D%8C"
@@ -119,17 +128,24 @@ selected_subjects = st.multiselect(
     placeholder="연관 교과목을 선택하세요..."
 )
 
-# 7. 잠정적 탐구 주제 입력
-st.subheader("5. 현재 생각 중인 탐구 주제")
+# 7. 활용 키워드 및 교과 핵심 내용 (신규 추가)
+st.subheader("5. 활용하고 싶은 키워드 혹은 교과 핵심 내용 요소")
+keyword_elements = st.text_input(
+    "교과서에서 배운 핵심 원리나 탐구에 꼭 포함하고 싶은 키워드를 적어주세요.",
+    placeholder="예) 산화·환원 반응, 촉매, 효소 작용 원리 등"
+)
+
+# 8. 희망 탐구 주제 (명칭 변경)
+st.subheader("6. 희망 탐구 주제")
 initial_topic = st.text_area(
     "자료조사를 통해 확정한, 혹은 고민 중인 탐구 주제를 자유롭게 적어주세요.",
     placeholder="예) 2학년 화학 시간에 배운 중화반응을 활용해 토양 오염을 해결하는 방안을 탐구하고 싶음."
 )
 
-# 8. 시스템 프롬프트 (핵심 질문 및 호기심 도출 단계 추가)
+# 9. 시스템 프롬프트 (요구사항 전면 반영)
 system_prompt = """
 당신은 고등학교 학생부종합전형(입학사정관) 및 2022 개정 교육과정 교과 세특 전문가입니다. 
-학생이 입력하거나 파일로 제출한 [사전 수행 활동], [연관 교과목], [초기 탐구 주제]를 유기적으로 연결하여, 과거 활동에서 한 단계 더 심화·확장되는 '꼬리물기식 탐구(종단적 연계)'가 되도록 설계해야 합니다.
+학생이 입력하거나 파일로 제출한 [사전 수행 활동], [연관 교과목], [활용 키워드/교과 핵심 요소], [희망 탐구 주제]를 유기적으로 연결하여, 과거 활동에서 한 단계 더 심화·확장되는 '꼬리물기식 탐구(종단적 연계)'가 되도록 설계해야 합니다.
 
 [핵심 출력 조건: 개조식 작성]
 모든 내용은 길고 장황한 서술형 문장을 절대 배제하십시오. 
@@ -138,44 +154,44 @@ system_prompt = """
 반드시 다음 6가지 형식과 조건에 맞춰 답변을 제공하세요:
 
 1. [교과 연계성 및 주제 진단]
-   - 학생의 '사전 활동(텍스트 및 파일 내용)', '현재 주제', 그리고 **'선택한 연관 교과목'** 간의 유기적 연계성 평가 (개조식)
+   - 학생의 '사전 활동', '희망 주제', '선택한 연관 교과목', 그리고 **'활용 키워드/핵심 요소'** 간의 유기적 연계성 평가 (개조식)
    - 2022 개정 교육과정을 바탕으로 해당 교과목의 어떤 핵심 개념과 원리가 본 탐구 주제에 적용될 수 있는지 명시적으로 분석 (개조식)
    - 학업 역량을 돋보이게 하기 위한 발전 및 보완점 제시 (개조식)
 
 2. [탐구 출발점: 핵심 질문 및 호기심 도출]
-   - 본격적인 탐구 주제로 발전하기 전, 학생이 일상이나 교과 수업 중 가질 법한 자연스럽고 날카로운 **'지적 호기심'이나 '핵심 질문' 2~3가지**를 구체적인 의문문 형태로 제시하세요. (개조식)
+   - 본격적인 탐구 주제로 발전하기 전, 학생이 일상이나 교과 수업 중 가질 법한 자연스럽고 날카로운 **'지적 호기심'이나 '핵심 질문' 2~3가지**를 구체적인 의문문 형태로 제시 (개조식)
 
 3. [구체화된 탐구 주제 제안]
-   - 진로, 교과목, 이전 활동과 연계된 구체적이고 심화된 탐구 소주제를 **반드시 5가지** 제안
+   - 진로, 교과목, 핵심 키워드, 이전 활동과 연계된 구체적이고 심화된 탐구 소주제를 **반드시 5가지** 제안
    - 각 주제는 문제해결, 논리적 분석, 교과 개념이 명시된 전문적인 '보고서 제목' 형태로 작성
 
 4. [탐구 과정 가이드 (상세화)]
    - 제안된 5가지 주제 중 가장 추천하는 1가지를 골라, 다음 4단계에 따라 구체적 가이드
-   - [동기 및 가설 설정]: 앞서 도출한 핵심 질문이나 교과서 개념에서 출발하여 어떻게 이 주제로 넘어왔는지, 어떤 가설을 세울 수 있는지 (개조식)
+   - [동기 및 가설 설정]: 앞서 도출한 핵심 질문이나 교과서 개념에서 출발하여 어떤 가설을 세울 수 있는지 (개조식)
    - [핵심 탐구 질문]: 이 탐구를 관통하는 구체적인 리서치 퀘스천(Research Question) (명확한 질문형)
    - [조사 및 분석 방법]: 분석 방식, 통계자료, 교과서 단원 등 전공 용어 활용 (개조식)
    - [예상 결론 및 시사점 (구체화)]: 탐구를 통해 도출될 수 있는 구체적인 결론의 모습과, 이것이 지원 전공(진로) 분야에 던지는 학술적/실무적 시사점을 상세히 작성 (개조식)
 
-5. [탐구의 기대 효과 및 유의사항] (학생 동기부여 및 시행착오 방지)
-   - [탐구 진행 시 긍정적 기대 효과]: 이 탐구를 성공적으로 마쳤을 때 입학사정관에게 어필할 수 있는 학업 역량, 전공 적합성, 문제해결력 등 구체적인 성장 포인트 (개조식)
-   - [예상되는 어려움 및 극복 방안]: 자료 조사의 한계, 고등학생 수준을 벗어나는 어려운 개념 등 학생이 겪을 수 있는 구체적인 어려움과, 이를 우회하거나 해결할 수 있는 현실적인 팁(Tip) 안내 (개조식)
+5. [탐구의 기대 효과 및 유의사항] 
+   - [탐구 진행 시 긍정적 기대 효과]: 탐구 성공 시 입학사정관에게 어필할 수 있는 학업 역량, 전공 적합성 등 구체적인 성장 포인트 (개조식)
+   - [예상되는 어려움 및 극복 방안]: 자료 조사의 한계, 어려운 개념 등 겪을 수 있는 구체적인 어려움과 현실적인 팁(Tip) 안내 (개조식)
 
 6. [맞춤형 도서 및 연계 활동 제안]
-   - [추천 도서/기사]: 제공된 **[참고 웹 크롤링 데이터]**를 최우선 분석하여, 고등학생 수준에서 충분히 읽고 소화할 수 있는 관련 도서/기사 **2권(편)**을 추천하세요. (저자와 고등학생 맞춤 추천 이유 필수 포함)
-   - [일반 후속 연계 활동]: 창체(자율/동아리/진로)나 타 과목 세특으로 확장할 수 있는 후속 연계 활동을 **반드시 3가지** 제안하세요 (개조식)
-   - [독서 융합 심화 연계 활동]: 앞서 추천한 **[추천 도서]**의 내용과 **[현재 탐구 주제]**를 직접적으로 융합하여 제안하는 심화 독서 연계 활동 **1가지**를 별도 항목으로 명확히 구분하여 제안 (개조식)
+   - [추천 도서/기사]: 제공된 **[참고 웹 크롤링 데이터]**를 최우선 분석하여, 고등학생 수준에 맞는 관련 도서/기사 **2권(편)** 추천 (이유 포함)
+   - [일반 후속 연계 활동]: 창체나 타 과목 세특으로 확장할 수 있는 후속 활동 **반드시 3가지** 제안 (개조식)
+   - [독서 융합 심화 연계 활동]: 앞서 추천한 도서 내용과 현재 주제를 융합하는 심화 독서 연계 활동 **1가지** 제안 (개조식)
 """
 
-# 9. 피드백 생성 버튼 및 실행 로직
+# 10. 피드백 생성 버튼 및 실행 로직
 if st.button("🚀 교과 연계 심화 탐구 피드백 받기"):
     if not api_key:
         st.error("왼쪽 사이드바에 해당 제공자의 API 키를 입력해주세요.")
     elif not selected_subjects:
         st.warning("4번 항목에서 연관 교과목을 최소 1개 이상 선택해주세요.")
     elif not initial_topic:
-        st.warning("5번 항목에 현재 생각 중인 탐구 주제를 입력해주세요.")
+        st.warning("6번 항목에 희망 탐구 주제를 입력해주세요.")
     else:
-        with st.spinner("2022 개정 교육과정 세부 분석 및 업로드 파일을 바탕으로 심층 분석 중입니다... ⏳"):
+        with st.spinner("2022 개정 교육과정 세부 분석 및 핵심 키워드를 바탕으로 심층 분석 중입니다... ⏳"):
             try:
                 # 1) 웹 크롤링 수행
                 crawled_data = scrape_reference_data()
@@ -197,19 +213,21 @@ if st.button("🚀 교과 연계 심화 탐구 피드백 받기"):
                     prior_text = "특별히 입력된 사전 활동 없음 (현재 선택된 교과목과 주제에 집중하여 심화할 것)"
                     
                 subjects_str = ", ".join(selected_subjects)
+                keyword_str = keyword_elements if keyword_elements.strip() else "특별히 지정된 키워드 없음"
                 
                 user_prompt = f"""
                 [학생 정보] {school_name} {grade} {student_name}
                 [진로 계열] {career_track} ({specific_interest})
-                [사전 수행 활동 및 파일 본문 통합 데이터] {prior_text}
+                [사전 수행 활동 및 파일 본문] {prior_text}
                 [선택한 연관 교과목] {subjects_str}
-                [초기 탐구 주제] {initial_topic}
+                [활용 키워드/교과 핵심 요소] {keyword_str}
+                [희망 탐구 주제] {initial_topic}
                 
-                [참고 웹 크롤링 데이터 - 이 데이터를 바탕으로 고등학생 수준에 맞는 책/기사를 추천할 것]
+                [참고 웹 크롤링 데이터]
                 {crawled_data}
                 """
                 
-                # 3) 분기 1: Google AI Studio (모델명 고정)
+                # 3) 모델 호출
                 if api_provider == "Google AI Studio (공식)":
                     genai.configure(api_key=api_key)
                     model = genai.GenerativeModel(
@@ -217,9 +235,7 @@ if st.button("🚀 교과 연계 심화 탐구 피드백 받기"):
                         system_instruction=system_prompt
                     )
                     response = model.generate_content(user_prompt)
-                    result_text = response.text
-                
-                # 4) 분기 2: OpenRouter
+                    st.session_state.result_text = response.text
                 else:
                     client = OpenAI(
                         base_url="https://openrouter.ai/api/v1",
@@ -232,22 +248,95 @@ if st.button("🚀 교과 연계 심화 탐구 피드백 받기"):
                             {"role": "user", "content": user_prompt}
                         ]
                     )
-                    result_text = response.choices[0].message.content
-                
-                # 5) 결과 출력
-                st.success("분석이 완료되었습니다!")
-                st.markdown("---")
-                st.markdown(result_text)
+                    st.session_state.result_text = response.choices[0].message.content
 
             except Exception as e:
                 st.error(f"오류가 발생했습니다: {e}")
 
-# 10. 프로그램 하단 만든 이 및 제목 표시 푸터
+# 11. 결과 출력 및 다운로드 기능 제공
+if st.session_state.result_text:
+    st.success("분석이 완료되었습니다!")
+    st.markdown("---")
+    st.markdown(st.session_state.result_text)
+    
+    st.markdown("---")
+    st.markdown("### 📥 결과 다운로드")
+    st.info("원하시는 포맷을 선택하여 결과물을 저장하세요. (PDF는 한글 폰트 문제로 인해 '워드' 다운로드 후 PDF 변환을 가장 권장합니다.)")
+    
+    # 다운로드 파일 생성 함수
+    def create_word(text):
+        doc = Document()
+        doc.add_heading('학생부 심화 탐구주제 구체화 결과', 0)
+        doc.add_paragraph(text)
+        bio = io.BytesIO()
+        doc.save(bio)
+        return bio.getvalue()
+
+    def create_excel(text):
+        df = pd.DataFrame({"구분": ["탐구 주제 구체화 분석 결과"], "내용": [text]})
+        bio = io.BytesIO()
+        with pd.ExcelWriter(bio, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Result')
+        return bio.getvalue()
+
+    def create_pdf(text):
+        try:
+            pdf = FPDF()
+            pdf.add_page()
+            # 한글 폰트가 동일 폴더에 있어야 합니다. 없으면 에러 발생
+            font_path = "NanumGothic.ttf"
+            if os.path.exists(font_path):
+                pdf.add_font("Nanum", "", font_path, uni=True)
+                pdf.set_font("Nanum", size=11)
+                pdf.multi_cell(0, 10, text)
+                return pdf.output(dest='S').encode('latin-1')
+            else:
+                return None
+        except:
+            return None
+
+    # 다운로드 버튼 레이아웃
+    dl_col1, dl_col2, dl_col3 = st.columns(3)
+    
+    with dl_col1:
+        word_data = create_word(st.session_state.result_text)
+        st.download_button(
+            label="📄 Word (.docx) 다운로드",
+            data=word_data,
+            file_name="탐구주제_분석결과.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            use_container_width=True
+        )
+        
+    with dl_col2:
+        excel_data = create_excel(st.session_state.result_text)
+        st.download_button(
+            label="📊 Excel (.xlsx) 다운로드",
+            data=excel_data,
+            file_name="탐구주제_분석결과.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
+        
+    with dl_col3:
+        pdf_data = create_pdf(st.session_state.result_text)
+        if pdf_data:
+            st.download_button(
+                label="📕 PDF (.pdf) 다운로드",
+                data=pdf_data,
+                file_name="탐구주제_분석결과.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
+        else:
+            st.button("📕 PDF 다운로드 (폰트 설정 필요)", disabled=True, use_container_width=True, help="프로그램 폴더 내에 'NanumGothic.ttf' 폰트 파일이 없어 PDF 기능이 비활성화되었습니다. 워드 파일로 다운로드하여 활용해 주세요.")
+
+# 12. 프로그램 하단 만든 이 및 제목 표시 푸터
 st.markdown("---")
 st.markdown(
     """
     <div style="text-align: center; color: #7f8c8d; font-size: 0.9em; line-height: 1.6;">
-        <strong>🏫 탐구 역량 강화를 위한 주제 탐구 구체화 어시스트 프로그램 v2.2</strong><br>
+        <strong>🏫 탐구 역량 강화를 위한 주제 탐구 구체화 어시스트 프로그램 v2.3</strong><br>
         <span style="font-size: 0.85em;">만든 이: <strong>G.E.M.S</strong></span>
     </div>
     """, 
