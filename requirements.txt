@@ -3,3 +3,7 @@ openai>=1.0.0
 google-generativeai>=0.7.0
 requests
 beautifulsoup4
+python-docx
+pandas
+openpyxl
+fpdf
